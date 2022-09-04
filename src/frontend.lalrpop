@@ -1,0 +1,46 @@
+use std::str::FromStr;
+use crate::{Expr};
+
+grammar;
+
+pub Val: f64 = <s:r"[0-9]+\.[0.9]*"> => f64::from_str(s).unwrap();
+pub Ident: u32 = <s:r"[0-9]+"> => u32::from_str(s).unwrap();
+
+pub Program: Expr = {
+}
+
+pub SoftBool: Expr = {
+  <lhs:BOp> "==" <rhs:BOp> => lhs * rhs,
+  <lhs:BOp> "!=" <rhs:BOp> => Expr::ONE - (lhs * rhs),
+  <lhs:BOp> ">" <rhs:BOp> => lhs - rhs,
+  <lhs:BOp> "<" <rhs:BOp> => rhs - lhs,
+}
+
+pub If: Expr = {
+  "if" <cond:SoftBool> "{" <then:BOp> "}" <ow:Else> => {
+    cond.clone().heavside() * then + cond.heavside().fuzzy_not() * ow
+  },
+}
+pub Else: Expr = {
+  "else" "{" <ow:BOp> "}" => ow,
+  "" => Expr::ZERO,
+}
+
+pub BOp: Expr = {
+  <lhs:BOp> "+" <rhs:Fundamental> => lhs + rhs,
+  <lhs:BOp> "*" <rhs:Fundamental> => lhs * rhs,
+  <e:Fundamental> => e,
+}
+
+pub Fundamental: Expr = {
+  <v:Val> => Expr::Const(v),
+  "abs" "(" <b:BOp> ")" => b.abs(),
+  "heavside" "(" <b:BOp> ")" => Expr::Heavside(box b),
+
+  "Var(" <id:Ident> ")" => Expr::Var { id, sampling_axis: false },
+  "Discrete(" <id:Ident> ")" => Expr::Var { id, sampling_axis: true },
+  <branch:If> => branch,
+
+  "(" <e:BOp> ")" => e,
+}
+
